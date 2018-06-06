@@ -1,0 +1,102 @@
+/*******************************************************************************************************************************
+--	Script execution sequence to create the alerts in the Database.
+*******************************************************************************************************************************/
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- 1)	Create the operator for the job notification and also for the severity alerts that we are going to create
+--		Create the Trace Database
+--------------------------------------------------------------------------------------------------------------------------------
+ 
+use master 
+go 
+sp_configure 'show advanced options',1 
+go 
+reconfigure with override 
+go 
+sp_configure 'Database Mail XPs',1 
+go 
+reconfigure 
+go 
+ 
+-------------------------------------------------------------------------------------------------- 
+-- BEGIN Mail Settings DBA Profile 
+-------------------------------------------------------------------------------------------------- 
+IF NOT EXISTS(SELECT * FROM msdb.dbo.sysmail_profile WHERE  name = 'DBA Profile')  
+  BEGIN 
+    --CREATE Profile [DBA Profile] 
+    EXECUTE msdb.dbo.sysmail_add_profile_sp 
+      @profile_name = 'DBA Profile', 
+      @description  = ''; 
+  END --IF EXISTS profile 
+   
+  IF NOT EXISTS(SELECT * FROM msdb.dbo.sysmail_account WHERE  name = 'DBA Support') 
+  BEGIN 
+    --CREATE Account [DBA Support] 
+    EXECUTE msdb.dbo.sysmail_add_account_sp 
+    @account_name            = 'DBA Support', 
+    @email_address           = 'contato@learning365.com.br', 
+    @display_name            = 'DBA', 
+    @replyto_address         = '', 
+    @description             = '', 
+    @mailserver_name         = 'smtp.outlook.office365.com', 
+    @mailserver_type         = 'SMTP', 
+    @port                    = '587', 
+    @username                = 'contato@learning365.com.br', 
+    @password                = 'NotTheRealPassword',  
+    @use_default_credentials =  0 , 
+    @enable_ssl              =  1 ; 
+  END --IF EXISTS  account 
+   
+IF NOT EXISTS(SELECT * 
+              FROM msdb.dbo.sysmail_profileaccount pa 
+                INNER JOIN msdb.dbo.sysmail_profile p ON pa.profile_id = p.profile_id 
+                INNER JOIN msdb.dbo.sysmail_account a ON pa.account_id = a.account_id   
+              WHERE p.name = 'DBA Profile' 
+                AND a.name = 'DBA Support')  
+  BEGIN 
+    -- Associate Account [DBA Support] to Profile [DBA Profile] 
+    EXECUTE msdb.dbo.sysmail_add_profileaccount_sp 
+      @profile_name = 'DBA Profile', 
+      @account_name = 'DBA Support', 
+      @sequence_number = 1 ; 
+  END  
+
+USE [msdb];
+
+GO
+
+EXEC [msdb].[dbo].[sp_add_operator] @name = N'DBA',
+                                    @enabled = 1,
+                                    @pager_days = 0,
+                                    @email_address = N'sqlfreccia@outlook.com'; -- If you need more emails just use ";" and add the next one.
+GO
+
+
+-- We set this Database Mail Profie in the SQL Server Agent. Needs a Service Restart
+USE [msdb]
+GO
+EXEC msdb.dbo.sp_set_sqlagent_properties @email_save_in_sent_folder=1, 
+		@databasemail_profile=N'DBA Profile' 
+		GO
+
+
+/* 
+-- In case we don't have the database, we create one
+
+*/
+
+USE master
+
+GO
+
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'DBAUtils')
+BEGIN
+CREATE DATABASE DBAUtils 
+
+ALTER DATABASE DBAUtils SET RECOVERY SIMPLE
+END
+ELSE
+BEGIN
+ALTER DATABASE DBAUtils SET RECOVERY SIMPLE    
+END
+

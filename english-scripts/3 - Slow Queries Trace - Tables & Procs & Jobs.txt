@@ -1,0 +1,419 @@
+
+/*******************************************************************************************************************************
+--	Instruções de utilização do script.
+*******************************************************************************************************************************/
+--	1) Fazer um Replace(CTRL + H) no caminho "C:\Temp" e alterar para um Caminho Real no servidor.
+
+--------------------------------------------------------------------------------------------------------------------------------
+--	Trace table creation.
+--------------------------------------------------------------------------------------------------------------------------------
+USE DBAUtils;
+
+IF OBJECT_ID('Traces') IS NOT NULL
+    DROP TABLE Traces;
+
+CREATE TABLE [dbo].[Traces]
+(
+    [TextData] VARCHAR(MAX) NULL,
+    [NTUserName] [VARCHAR](128) NULL,
+    [HostName] [VARCHAR](128) NULL,
+    [ApplicationName] [VARCHAR](128) NULL,
+    [LoginName] [VARCHAR](128) NULL,
+    [SPID] [INT] NULL,
+    [Duration] [NUMERIC](15, 2) NULL,
+    [StartTime] [DATETIME] NULL,
+    [EndTime] [DATETIME] NULL,
+    [ServerName] [VARCHAR](128) NULL,
+    [Reads] [INT] NULL,
+    [Writes] [INT] NULL,
+    [CPU] [INT] NULL,
+    [DataBaseName] [VARCHAR](128) NULL,
+    [RowCounts] [INT] NULL,
+    [SessionLoginName] [VARCHAR](128) NULL
+) ON [PRIMARY];
+
+GO
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- Criando a procedure que irá criar o Trace.
+--------------------------------------------------------------------------------------------------------------------------------
+USE DBAUtils;
+
+
+
+IF OBJECT_ID('usp_create_trace') IS NOT NULL
+    DROP PROCEDURE usp_create_trace;
+
+GO
+CREATE PROCEDURE [dbo].usp_create_trace
+AS
+BEGIN
+
+
+DECLARE @TraceFilePath nvarchar(256)
+SET @TraceFilePath = 'F:\Trace\Slow_Queries'
+
+
+    -- Trace Queries Demoradas
+    DECLARE @Id_Alert_Parameter INT = (
+                                           SELECT Id_Alert_Parameter
+                                           FROM [DBAUtils].[dbo].Alert_Parameters (NOLOCK)
+                                           WHERE Alert_Name = 'Slow Queries Trace');
+
+    --------------------------------------------------------------------------------------------------------------------------------
+    -- Retrieve the parameters for the alert
+    --------------------------------------------------------------------------------------------------------------------------------
+    DECLARE @Trace_Time INT;
+
+    SELECT @Trace_Time = Parameter_Value -- Seconds
+    FROM [dbo].Alert_Parameters
+    WHERE Id_Alert_Parameter = @Id_Alert_Parameter; -- Slow Queries trace
+
+    -- Security Check for placing a default value in the variable
+    IF (@Trace_Time IS NULL OR @Trace_Time < 0)
+    BEGIN
+        SELECT @Trace_Time = 3; -- Seconds
+    END;
+
+    /*******************************************************************************************************************************
+	-- Created by: SQL Server Profiler 2005
+	-- Date: 09/09/2008  14:44:14
+	*******************************************************************************************************************************/
+    -- Create a Queue.
+    DECLARE @rc INT;
+    DECLARE @TraceID INT;
+    DECLARE @maxfilesize BIGINT;
+    SET @maxfilesize = 100; -- You can set the File Size depending on your environment.
+
+    /*******************************************************************************************************************************
+	-- ATENTION!!!
+	-- Change this path to the desired one!!!
+	*******************************************************************************************************************************/
+    EXEC @rc = sp_trace_create @TraceID OUTPUT,
+                               0,
+                               @TraceFilePath,
+                               @maxfilesize,
+                               NULL;
+
+    IF (@rc != 0)
+        GOTO error;
+
+    -- Client side File and Table cannot be scripted.
+
+    -- Set the events.
+    DECLARE @on BIT;
+    SET @on = 1;
+
+    -- 10 RPC:Completed Ocorre quando uma RPC (chamada de procedimento remoto) é concluída. 
+    EXEC sp_trace_setevent @TraceID, 10, 1, @on; -- TextData: Valor de texto dependente da classe de evento capturada no rastreamento.
+    EXEC sp_trace_setevent @TraceID, 10, 6, @on; -- NTUserName: Nome de usuário do Microsoft Windows. 
+    EXEC sp_trace_setevent @TraceID, 10, 8, @on; -- HostName: Nome do computador cliente que originou a solicitação. 
+    EXEC sp_trace_setevent @TraceID, 10, 10, @on; -- ApplicationName: Nome do aplicativo cliente que criou a conexão com uma instância do SQL Server.
+    -- Essa coluna é populada com os valores passados pelo aplicativo e não com o nome exibido do programa.
+    EXEC sp_trace_setevent @TraceID, 10, 11, @on; -- LoginName: Nome de logon do cliente no SQL Server.
+    EXEC sp_trace_setevent @TraceID, 10, 12, @on; -- SPID: ID de processo de servidor atribuída pelo SQL Server ao processo associado ao cliente.
+    EXEC sp_trace_setevent @TraceID, 10, 13, @on; -- Duration: Tempo decorrido (em milhões de segundos) utilizado pelo evento. 
+    -- Esta coluna de dados não é populada pelo evento Hash Warning.
+    EXEC sp_trace_setevent @TraceID, 10, 14, @on; -- StartTime: Horário de início do evento, quando disponível.
+    EXEC sp_trace_setevent @TraceID, 10, 15, @on; -- EndTime: Horário em que o evento foi encerrado. Esta coluna não é populada para classes de evento
+    -- iniciais, como SQL:BatchStarting ou SP:Starting. Também não é populada pelo evento Hash Warning.
+    EXEC sp_trace_setevent @TraceID, 10, 16, @on; -- Reads: Número de leituras lógicas do disco executadas pelo servidor em nome do evento. 
+    -- Esta coluna não é populada pelo evento Lock:Released.
+    EXEC sp_trace_setevent @TraceID, 10, 17, @on; -- Writes: Número de gravações no disco físico executadas pelo servidor em nome do evento.
+    EXEC sp_trace_setevent @TraceID, 10, 18, @on; -- CPU: Tempo da CPU (em milissegundos) usado pelo evento.
+    EXEC sp_trace_setevent @TraceID, 10, 19, @on; -- CPU: Tempo da CPU (em milissegundos) usado pelo evento.
+    EXEC sp_trace_setevent @TraceID, 10, 26, @on; -- ServerName: Nome da instância do SQL Server, servername ou servername\instancename, 
+    -- que está sendo rastreada
+    EXEC sp_trace_setevent @TraceID, 10, 35, @on; -- DatabaseName: Nome do banco de dados especificado na instrução USE banco de dados.
+    EXEC sp_trace_setevent @TraceID, 10, 40, @on; -- DBUserName: Nome de usuário do banco de dados do SQL Server do cliente.
+    EXEC sp_trace_setevent @TraceID, 10, 48, @on; -- RowCounts: Número de linhas no lote.
+    EXEC sp_trace_setevent @TraceID, 10, 64, @on; -- SessionLoginName: O nome de logon do usuário que originou a sessão. Por exemplo, se você 
+    -- se conectar ao SQL Server usando Login1 e executar uma instrução como Login2, SessionLoginName
+    -- irá exibir Login1, enquanto que LoginName exibirá Login2. Esta coluna de dados exibe logons
+    -- tanto do SQL Server, quanto do Windows.
+
+    EXEC sp_trace_setevent @TraceID, 12, 1, @on; -- TextData: Valor de texto dependente da classe de evento capturada no rastreamento.
+    EXEC sp_trace_setevent @TraceID, 12, 6, @on; -- NTUserName: Nome de usuário do Microsoft Windows. 
+    EXEC sp_trace_setevent @TraceID, 12, 8, @on; -- HostName: Nome do computador cliente que originou a solicitação. 
+    EXEC sp_trace_setevent @TraceID, 12, 10, @on; -- ApplicationName: Nome do aplicativo cliente que criou a conexão com uma instância do SQL Server. 
+    -- Essa coluna é populada com os valores passados pelo aplicativo e não com o nome exibido do programa.
+    EXEC sp_trace_setevent @TraceID, 12, 11, @on; -- LoginName: Nome de logon do cliente no SQL Server.
+    EXEC sp_trace_setevent @TraceID, 12, 12, @on; -- SPID: ID de processo de servidor atribuída pelo SQL Server ao processo associado ao cliente.
+    EXEC sp_trace_setevent @TraceID, 12, 13, @on; -- Duration: Tempo decorrido (em milhões de segundos) utilizado pelo evento. Esta coluna de dados não
+    -- é populada pelo evento Hash Warning.
+    EXEC sp_trace_setevent @TraceID, 12, 14, @on; -- StartTime: Horário de início do evento, quando disponível.
+    EXEC sp_trace_setevent @TraceID, 12, 15, @on; -- EndTime: Horário em que o evento foi encerrado. Esta coluna não é populada para classes de evento
+    -- iniciais, como SQL:BatchStarting ou SP:Starting. Também não é populada pelo evento Hash Warning.
+    EXEC sp_trace_setevent @TraceID, 12, 16, @on; -- Reads: Número de leituras lógicas do disco executadas pelo servidor em nome do evento. 
+    -- Esta coluna não é populada pelo evento Lock:Released.
+    EXEC sp_trace_setevent @TraceID, 12, 17, @on; -- Writes: Número de gravações no disco físico executadas pelo servidor em nome do evento.
+    EXEC sp_trace_setevent @TraceID, 12, 18, @on; -- CPU: CPU time (in miliseconds) used by the event.
+    EXEC sp_trace_setevent @TraceID, 12, 26, @on; -- ServerName: Nome da instância do SQL Server, servername ou servername\instancename, 
+    -- que está sendo rastreada
+    EXEC sp_trace_setevent @TraceID, 12, 35, @on; -- DatabaseName: Nome do banco de dados especificado na instrução USE banco de dados.
+    EXEC sp_trace_setevent @TraceID, 12, 40, @on; -- DBUserName: Nome de usuário do banco de dados do SQL Server do cliente.
+    EXEC sp_trace_setevent @TraceID, 12, 48, @on; -- RowCounts: Número de linhas no lote.
+    EXEC sp_trace_setevent @TraceID, 12, 64, @on; -- SessionLoginName: O nome de logon do usuário que originou a sessão. Por exemplo, se você se
+    -- conectar ao SQL Server usando Login1 e executar uma instrução como Login2, SessionLoginName
+    -- irá exibir Login1, enquanto que LoginName exibirá Login2. Esta coluna de dados exibe logons
+    -- tanto do SQL Server, quanto do Windows.
+
+    -- Set the Filters.
+    DECLARE @intfilter INT;
+    DECLARE @bigintfilter BIGINT;
+
+    EXEC sp_trace_setfilter @TraceID,
+                            10,
+                            0,
+                            7,
+                            N'SQL Server Profiler - 4d8f4bca-f08c-4755-b90c-6ec17a6f1275';
+    EXEC sp_trace_setfilter @TraceID, 10, 0, 7, N'DatabaseMail90%';
+
+    /*******************************************************************************************************************************
+	-- Configura o tempo mínimo para as queries demoradas (em segundos)
+	*******************************************************************************************************************************/
+    SET @bigintfilter = 1000000 * @Trace_Time; --  @Trace_Time (in seconds)
+
+    EXEC sp_trace_setfilter @TraceID, 13, 0, 4, @bigintfilter;
+
+    SET @bigintfilter = NULL;
+    EXEC sp_trace_setfilter @TraceID, 13, 0, 1, @bigintfilter;
+
+    EXEC sp_trace_setfilter @TraceID, 1, 0, 7, N'NO STATS%';
+
+    EXEC sp_trace_setfilter @TraceID, 1, 0, 7, N'NULL%';
+
+    -- Set the trace status to start.
+    EXEC sp_trace_setstatus @TraceID, 1;
+
+    -- Display trace id for future references.
+    SELECT TraceID = @TraceID;
+
+    GOTO finish;
+
+    error:
+    SELECT ErrorCode = @rc;
+
+    finish:
+END;
+
+GO
+
+/*******************************************************************************************************************************
+-- Creation of the Job for the Traces do JOB de Traces.
+*******************************************************************************************************************************/
+
+USE [msdb];
+
+GO
+
+-- In case the job exists, we drop it and create a new one.
+IF EXISTS
+(
+    SELECT job_id
+    FROM msdb.dbo.sysjobs_view
+    WHERE name = N'DBA - Database Trace'
+)
+    EXEC msdb.dbo.sp_delete_job @job_name = N'DBA - Database Trace',
+                                @delete_unused_schedule = 1;
+
+GO
+
+BEGIN TRANSACTION;
+DECLARE @ReturnCode INT;
+SELECT @ReturnCode = 0;
+
+------------------------------------------------------------------------------------------------------------------------------------	
+-- Retrieve the Job Category
+------------------------------------------------------------------------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT name
+    FROM msdb.dbo.syscategories
+    WHERE name = N'Database Maintenance'
+          AND category_class = 1
+)
+BEGIN
+    EXEC @ReturnCode = msdb.dbo.sp_add_category @class = N'JOB',
+                                                @type = N'LOCAL',
+                                                @name = N'Database Maintenance';
+    IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+        GOTO QuitWithRollback;
+END;
+
+DECLARE @jobId BINARY(16);
+EXEC @ReturnCode = msdb.dbo.sp_add_job @job_name = N'DBA - Database Trace',
+                                       @enabled = 1,
+                                       @notify_level_eventlog = 0,
+                                       @notify_level_email = 0,
+                                       @notify_level_netsend = 0,
+                                       @notify_level_page = 0,
+                                       @delete_level = 0,
+                                       @description = N'No description available.',
+                                       @category_name = N'Database Maintenance',
+                                       @owner_login_name = N'sa',
+                                       @job_id = @jobId OUTPUT;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+------------------------------------------------------------------------------------------------------------------------------------	
+-- Cria o Step 1 do JOB - Desabilita o Trace
+------------------------------------------------------------------------------------------------------------------------------------
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id = @jobId,
+                                           @step_name = N'DBA - Disable Trace',
+                                           @step_id = 1,
+                                           @cmdexec_success_code = 0,
+                                           @on_success_action = 3,
+                                           @on_success_step_id = 0,
+                                           @on_fail_action = 3,
+                                           @on_fail_step_id = 0,
+                                           @retry_attempts = 0,
+                                           @retry_interval = 0,
+                                           @os_run_priority = 0,
+                                           @subsystem = N'TSQL',
+                                           @command = N'
+declare @Traceid int
+
+select @Traceid = traceid
+from fn_trace_getinfo (null)
+where cast(value as varchar(100)) like ''%Slow_Queries%''
+
+exec sp_trace_setstatus  @Traceid ,  @status = 0
+exec sp_trace_setstatus  @Traceid ,  @status = 2
+
+',
+                                           @database_name = N'master',
+                                           @flags = 0;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+------------------------------------------------------------------------------------------------------------------------------------
+-- Cria o Step 2 do JOB - Insere registros Traces
+------------------------------------------------------------------------------------------------------------------------------------
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id = @jobId,
+                                           @step_name = N'Insert Records from the Traces',
+                                           @step_id = 2,
+                                           @cmdexec_success_code = 0,
+                                           @on_success_action = 3,
+                                           @on_success_step_id = 0,
+                                           @on_fail_action = 3,
+                                           @on_fail_step_id = 0,
+                                           @retry_attempts = 0,
+                                           @retry_interval = 0,
+                                           @os_run_priority = 0,
+                                           @subsystem = N'TSQL',
+                                           @command = N'Insert Into Traces(TextData, NTUserName, HostName, ApplicationName, LoginName, SPID, Duration, StartTime, 
+EndTime,  Reads, Writes, CPU, ServerName,DataBaseName, RowCounts, SessionLoginName)
+
+Select TextData,NTUserName, HostName, ApplicationName, LoginName, SPID, 
+cast(Duration /1000/1000.00 as numeric(15,2)) Duration, StartTime,
+EndTime, Reads,Writes, CPU, ServerName, DataBaseName, RowCounts, SessionLoginName
+FROM :: fn_trace_gettable(''F:\Trace\Slow_Queries.trc'', default)
+where Duration is not null
+	and rowcounts < 900000000
+	and reads < 900000000',
+                                           @database_name = N'DBAUtils',
+                                           @flags = 0;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+------------------------------------------------------------------------------------------------------------------------------------
+-- Cria o Step 3 do JOB - Exclui o arquivo de trace antigo
+------------------------------------------------------------------------------------------------------------------------------------
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id = @jobId,
+                                           @step_name = N'Delete old trace file',
+                                           @step_id = 3,
+                                           @cmdexec_success_code = 0,
+                                           @on_success_action = 3,
+                                           @on_success_step_id = 0,
+                                           @on_fail_action = 3,
+                                           @on_fail_step_id = 0,
+                                           @retry_attempts = 0,
+                                           @retry_interval = 0,
+                                           @os_run_priority = 0,
+                                           @subsystem = N'CmdExec',
+                                           @command = N'Del "F:\Trace\Slow_Queries.trc" /Q',
+                                           @flags = 0;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+------------------------------------------------------------------------------------------------------------------------------------
+-- Cria o Step 4 do JOB - Create the Trace
+------------------------------------------------------------------------------------------------------------------------------------
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id = @jobId,
+                                           @step_name = N'Create the trace',
+                                           @step_id = 4,
+                                           @cmdexec_success_code = 0,
+                                           @on_success_action = 1,
+                                           @on_success_step_id = 0,
+                                           @on_fail_action = 2,
+                                           @on_fail_step_id = 0,
+                                           @retry_attempts = 0,
+                                           @retry_interval = 0,
+                                           @os_run_priority = 0,
+                                           @subsystem = N'TSQL',
+                                           @command = N'exec dbo.usp_create_trace',
+                                           @database_name = N'DBAUtils',
+                                           @flags = 0;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+EXEC @ReturnCode = msdb.dbo.sp_update_job @job_id = @jobId,
+                                          @start_step_id = 1;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+DECLARE @Today VARCHAR(8) = CONVERT(VARCHAR(8), GETDATE(), 112);
+
+
+------------------------------------------------------------------------------------------------------------------------------------	
+-- Cria o Schedule do JOB
+------------------------------------------------------------------------------------------------------------------------------------
+EXEC @ReturnCode = msdb.dbo.sp_add_jobschedule @job_id = @jobId,
+                                               @name = N'DBA - Database Trace',
+                                               @enabled = 1,
+                                               @freq_type = 4,
+                                               @freq_interval = 1,
+                                               @freq_subday_type = 4,
+                                               @freq_subday_interval = 5,
+                                               @freq_relative_interval = 0,
+                                               @freq_recurrence_factor = 0,
+                                               @active_start_date = @Today,
+                                               @active_end_date = 99991231,
+                                               @active_start_time = 100,
+                                               @active_end_time = 235959;
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+EXEC @ReturnCode = msdb.dbo.sp_add_jobserver @job_id = @jobId,
+                                             @server_name = N'(local)';
+
+IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+    GOTO QuitWithRollback;
+
+COMMIT TRANSACTION;
+
+GOTO EndSave;
+
+QuitWithRollback:
+IF (@@TRANCOUNT > 0)
+    ROLLBACK TRANSACTION;
+
+EndSave:
+
+GO
+
+USE DBAUtils;
+
+GO
+
+EXEC [dbo].usp_create_trace;
+GO
+SELECT * FROM sys.traces

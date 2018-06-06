@@ -1,0 +1,324 @@
+-- delete from Traces..Alerta where Dt_Alerta = getdate()-1
+/*
+Instruções para realizar os testes.
+
+Colocar a execução da procedure EXEC [dbo].[stpAlerta_Queries_Demoradas] no JOB de Traces.
+
+Testar o alerta de lock sozinho
+
+Executar os outros testes
+
+
+*/
+
+
+/*******************************************************************************************************************************
+--	Create a new testing database for our DEMOS
+*******************************************************************************************************************************/
+USE [master];
+
+IF EXISTS (SELECT NULL FROM sys.databases WHERE name = 'AlertSimulation')
+    DROP DATABASE [AlertSimulation];
+
+CREATE DATABASE [AlertSimulation];
+
+ALTER DATABASE [AlertSimulation] SET RECOVERY SIMPLE;
+
+GO
+
+/*******************************************************************************************************************************
+--	Blocked Process
+*******************************************************************************************************************************/
+USE [AlertSimulation];
+
+-- Cria uma tabela de teste
+CREATE TABLE [dbo].[Lock_Test]
+(
+    [cod] INT
+);
+
+INSERT INTO [dbo].[Lock_Test]
+(
+    [cod]
+)
+VALUES
+(6  );
+
+-- Open another session and execute the below statement (Session 1)
+BEGIN TRAN;
+UPDATE [AlertSimulation].[dbo].[Lock_Test]
+SET [cod] = [cod];
+
+-- COMMIT
+
+---- Open another session and execute the below statement (Session 2) - This one will be blocked!
+BEGIN TRAN;
+UPDATE [AlertSimulation].[dbo].[Lock_Test]
+SET [cod] = [cod];
+
+-- COMMIT
+
+-- Checking the Blocked Process Manually
+EXEC [dbo].[sp_WhoIsActive];
+
+-- ALERT
+-- After 2 minutes of blocking happening, we can execute the proc below to raise the ALERT
+EXEC [DBAUtils].[dbo].[usp_Blocked_Process_Alert];
+
+-- CLEAR
+-- Executar o COMMIT nas Conexoes 1 e 2. Por fim, executar a procedure abaixo para enviar o CLEAR
+EXEC [DBAUtils].[dbo].[usp_Blocked_Process_Alert];
+
+-- Exclui a tabela de Teste
+DROP TABLE [dbo].[Lock_Test];
+
+GO
+
+/*******************************************************************************************************************************
+--	Transaction Log Full 
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERT
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 1
+WHERE Alert_Name = 'Transaction Log Full';
+
+EXEC [dbo].usp_transaction_log_full;
+
+-- CLEAR
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 85
+WHERE Alert_Name = 'Transaction Log Full';
+
+EXEC [dbo].usp_transaction_log_full;
+
+GO
+
+/*******************************************************************************************************************************
+--	Disk Space
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 1
+WHERE Alert_Name = 'Disk Space';
+
+EXEC [dbo].usp_Disk_Space_Alert;
+
+-- CLEAR
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 85
+WHERE Alert_Name = 'Disk Space';
+
+EXEC [dbo].usp_Disk_Space_Alert;
+
+GO
+
+/*******************************************************************************************************************************
+--	Consumo CPU
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 1
+WHERE Alert_Name = 'CPU Usage';
+
+EXEC [dbo].usp_CPU_Usage;
+
+-- CLEAR
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 85
+WHERE Alert_Name = 'CPU Usage';
+
+EXEC [dbo].usp_CPU_Usage;
+
+GO
+
+/*******************************************************************************************************************************
+--	Tempdb Utilization
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 0
+WHERE Alert_Name = 'Tempdb Utilization';
+
+EXEC [dbo].usp_Tempdb_Utilization_Alert;
+
+-- CLEAR
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 70
+WHERE Alert_Name = 'Tempdb Utilization';
+
+EXEC [dbo].usp_Tempdb_Utilization_Alert;
+
+GO
+
+/*******************************************************************************************************************************
+--	SQL Server Connections
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 2
+WHERE Alert_Name = 'SQL Server Connection';
+
+EXEC [dbo].usp_SQL_Server_Connection;
+
+-- CLEAR
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 2000
+WHERE Alert_Name = 'SQL Server Connection';
+
+EXEC [dbo].usp_SQL_Server_Connection;
+
+GO
+
+/*******************************************************************************************************************************
+--	Database Status / Corrupted Page
+*******************************************************************************************************************************/
+USE [master];
+
+-- ALERTA
+ALTER DATABASE [AlertSimulation] SET OFFLINE;
+
+EXEC [DBAUtils].[dbo].usp_Database_Errors_Alert;
+
+-- CLEAR
+ALTER DATABASE [AlertSimulation] SET ONLINE;
+
+EXEC [DBAUtils].[dbo].usp_Database_Errors_Alert;
+
+GO
+
+/*******************************************************************************************************************************
+--	Slow Queries
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 1
+WHERE Alert_Name = 'Slow Queries';
+
+EXEC [dbo].usp_Slow_Queries;
+
+-- Volta para o valor Default
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 100
+WHERE Alert_Name = 'Slow Queries';
+
+GO
+
+/*******************************************************************************************************************************
+--	Failed Jobs Falharam
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERT
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 48
+WHERE Alert_Name = 'Job Failed';
+
+EXEC [dbo].usp_Job_Failed_Alert;
+
+-- Update to default value
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 24
+WHERE Alert_Name = 'Job Failed';
+
+GO
+
+
+/*******************************************************************************************************************************
+--	SQL Server Restarted
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERT
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 500000
+WHERE Alert_Name = 'SQL Server Restarted';
+
+EXEC [dbo].usp_SQL_Server_Restarted_Alert;
+
+-- Volta para o valor Default
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 20
+WHERE Alert_Name = 'SQL Server Restarted';
+
+GO
+
+/*******************************************************************************************************************************
+--	Database Criada
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 48
+WHERE Alert_Name = 'Created Database';
+
+EXEC [dbo].usp_Created_Database_Alert;
+
+-- Volta para o valor Default
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 24
+WHERE Alert_Name = 'Created Database';
+
+GO
+
+/*******************************************************************************************************************************
+--	Database sem Backup
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+-- ALERTA
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 0
+WHERE Alert_Name = 'Databases without backup';
+
+EXEC [dbo].usp_Databases_without_backup;
+
+-- Volta para o valor Default
+UPDATE [dbo].[Alert_Parameters]
+SET Parameter_Value = 24
+WHERE Alert_Name = 'Databases without backup';
+
+GO
+
+/*******************************************************************************************************************************
+--	Processos em Execução
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+EXEC [dbo].usp_SendEmail_Executing_Processes;
+
+GO
+
+/*******************************************************************************************************************************
+--	Alertas de Severidade
+*******************************************************************************************************************************/
+RAISERROR('Testing the Severity Errors', 21, 1) WITH LOG;
+
+GO
+
+/*******************************************************************************************************************************
+--	Confere o Resultado dos Testes dos Alertas
+*******************************************************************************************************************************/
+USE DBAUtils;
+
+SELECT *
+FROM [dbo].[Alert_Parameters]
+ORDER BY Id_Alert_Parameter;
+
+SELECT *
+FROM [dbo].Alerts
+ORDER BY Alert_Date DESC;
+
+DROP DATABASE [AlertSimulation];

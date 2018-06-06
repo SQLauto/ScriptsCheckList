@@ -1,0 +1,95 @@
+/*******************************************************************************************************************************
+--	Instruções de utilização do script.
+*******************************************************************************************************************************/
+--	1) Substituir o e-mail "E-mail@provedor.com" pelos emails que devem receber os Alertas e substituir o profile 'MSSQLServer' pelo que será utilizado
+
+DECLARE @Email VARCHAR(MAX);
+DECLARE @EmailProfile VARCHAR(MAX);
+
+SELECT @Email = 'sqlfreccia@outlook.com';
+SELECT @EmailProfile = 'DBA Profile';
+--	2) Basta aperta F5 para executar o script completo.
+
+
+/*******************************************************************************************************************************
+--	Database que será utilizada para armazenar os dados dos Alertas. Se for necessário, altere para o nome desejado.
+*******************************************************************************************************************************/
+USE [DBAUtils];
+
+--------------------------------------------------------------------------------------------------------------------------------
+--	Alerts table creation
+--------------------------------------------------------------------------------------------------------------------------------
+USE [DBAUtils];
+
+IF (OBJECT_ID('[dbo].[Alerts]') IS NOT NULL)
+    DROP TABLE [dbo].[Alerts];
+
+CREATE TABLE [dbo].[Alerts]
+(
+    [Id] INT IDENTITY PRIMARY KEY,
+    [Id_Alert_Parameter] INT NOT NULL,
+    [Alert_Message] VARCHAR(2000),
+    [type] TINYINT, -- 0: CLEAR / 1: ALERTA
+    [Alert_Date] DATETIME
+        DEFAULT (GETDATE())
+);
+
+IF (OBJECT_ID('[dbo].[Alert_Parameters]') IS NOT NULL)
+    DROP TABLE [dbo].[Alert_Parameters];
+
+CREATE TABLE [dbo].[Alert_Parameters]
+(
+    [Id_Alert_Parameter] INT NOT NULL IDENTITY(1, 1) PRIMARY KEY,
+    [Alert_Name] VARCHAR(100) NOT NULL,
+    [Procedure_Name] VARCHAR(100) NOT NULL,
+    [Clear] BIT NOT NULL,
+    [Parameter_Value] INT NULL,
+    [Metric_Description] VARCHAR(50) NULL,
+    [Email_Profile] VARCHAR(200) NULL,
+    [Email] VARCHAR(500) NULL
+) ON [PRIMARY];
+
+ALTER TABLE [dbo].[Alerts]
+ADD CONSTRAINT FK01_Alerts
+    FOREIGN KEY ([Id_Alert_Parameter])
+    REFERENCES [dbo].[Alert_Parameters] ([Id_Alert_Parameter]);
+
+--------------------------------------------------------------------------------------------------------------------------------
+--	Insert Data on parameters table
+--------------------------------------------------------------------------------------------------------------------------------
+
+INSERT INTO dbo.Alert_Parameters
+(
+    Alert_Name,
+    Procedure_Name,
+    Clear,
+    Parameter_Value,
+    Metric_Description,
+    Email_Profile,
+    Email
+)
+VALUES
+('Database Checklist Version', '1.0.0', 0, NULL, NULL, @EmailProfile, @Email),
+('Alert Version', '1.0.0', 0, NULL, NULL, NULL, NULL),
+('Blocked Process', 'usp_Blocked_Process_Alert', 1, 2, 'Minutes', @EmailProfile, @Email),
+('Transaction Log Full', 'usp_transaction_log_Full', 1, 85, 'Percentage', @EmailProfile, @Email),
+('Disk Space', 'usp_Disk_Space_Alert', 1, 80, 'Percentage', @EmailProfile, @Email),
+('CPU Usage', 'usp_CPU_Usage', 1, 85, 'Percentage', @EmailProfile, @Email),
+('Tempdb Utilization', 'usp_Tempdb_Utilization_Alert', 1, 70, 'Percentage', @EmailProfile, @Email),
+('SQL Server Connection', 'usp_SQL_Server_Connection', 1, 2000, 'Quantity', @EmailProfile, @Email),
+('Database Status', 'usp_Database_Errors_Alert', 1, NULL, NULL, @EmailProfile, @Email),
+('Corrupted Page', 'usp_Database_Errors_Alert', 0, NULL, NULL, @EmailProfile, @Email),
+('Slow Queries', 'usp_Slow_Queries', 0, 100, 'Quantity', @EmailProfile, @Email),
+('Slow Queries Trace', 'usp_Create_Trace', 0, 3, 'Seconds', @EmailProfile, @Email),
+('Job Failed', 'usp_Job_Failed_Alert', 0, 24, 'Hours', @EmailProfile, @Email),
+('SQL Server Restarted', 'usp_SQL_Server_Restarted_Alert', 0, 20, 'Minutes', @EmailProfile, @Email),
+('Created Database', 'usp_Created_Database_Alert', 0, 24, 'Hours', @EmailProfile, @Email),
+('Databases without backup', 'usp_Databases_without_backup', 0, 24, 'Hours', @EmailProfile, @Email),
+('Corrupted Database', 'usp_checkdb_alert', 0, NULL, NULL, @EmailProfile, @Email),
+('Processes in execution', 'stp_SendEmail_Executing_Processes', 0, NULL, NULL, @EmailProfile, @Email);
+
+		
+SELECT *
+FROM [dbo].Alert_Parameters;
+
+-- select * from [dbo].Alert
