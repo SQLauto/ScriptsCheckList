@@ -1,12 +1,12 @@
 -- delete from Traces..Alerta where Dt_Alerta = getdate()-1
 /*
-Instruções para realizar os testes.
+Instructions to do the tests
 
-Colocar a execução da procedure EXEC [dbo].[stpAlerta_Queries_Demoradas] no JOB de Traces.
+You have to include the proc EXEC [dbo].[stpAlerta_Queries_Demoradas] in the trace job.
 
-Testar o alerta de lock sozinho
+Testing the locking alerts
 
-Executar os outros testes
+Use the other tests
 
 
 */
@@ -117,7 +117,7 @@ EXEC [dbo].usp_Disk_Space_Alert;
 GO
 
 /*******************************************************************************************************************************
---	Consumo CPU
+--	CPU Usage
 *******************************************************************************************************************************/
 USE DBAUtils;
 
@@ -216,7 +216,7 @@ WHERE Alert_Name = 'Slow Queries';
 GO
 
 /*******************************************************************************************************************************
---	Failed Jobs Falharam
+--	Failed Jobs
 *******************************************************************************************************************************/
 USE DBAUtils;
 
@@ -233,7 +233,6 @@ SET Parameter_Value = 24
 WHERE Alert_Name = 'Job Failed';
 
 GO
-
 
 /*******************************************************************************************************************************
 --	SQL Server Restarted
@@ -255,7 +254,7 @@ WHERE Alert_Name = 'SQL Server Restarted';
 GO
 
 /*******************************************************************************************************************************
---	Database Criada
+--	Databases created
 *******************************************************************************************************************************/
 USE DBAUtils;
 
@@ -274,7 +273,7 @@ WHERE Alert_Name = 'Created Database';
 GO
 
 /*******************************************************************************************************************************
---	Database sem Backup
+--	Databases without backup
 *******************************************************************************************************************************/
 USE DBAUtils;
 
@@ -293,7 +292,7 @@ WHERE Alert_Name = 'Databases without backup';
 GO
 
 /*******************************************************************************************************************************
---	Processos em Execução
+--	Processes in execution
 *******************************************************************************************************************************/
 USE DBAUtils;
 
@@ -302,14 +301,41 @@ EXEC [dbo].usp_SendEmail_Executing_Processes;
 GO
 
 /*******************************************************************************************************************************
---	Alertas de Severidade
+--	Severity Alerts
 *******************************************************************************************************************************/
 RAISERROR('Testing the Severity Errors', 21, 1) WITH LOG;
 
 GO
 
 /*******************************************************************************************************************************
---	Confere o Resultado dos Testes dos Alertas
+--	Testing Corruption
+*******************************************************************************************************************************/
+
+CREATE TABLE [Test] (
+    [c1] INT IDENTITY,
+    [c2] CHAR (8000) DEFAULT 'a');
+GO
+ 
+INSERT INTO [Test] DEFAULT VALUES;
+GO
+ 
+DBCC IND (N'AlertSimulation', N'Test', -1);
+GO
+
+USE master
+go
+ALTER DATABASE AlertSimulation SET SINGLE_USER;
+GO
+DBCC WRITEPAGE (N'AlertSimulation', 1, 360, 4000, 1, 0x45, 1);
+GO
+use AlertSimulation
+go
+SELECT * FROM [Test];
+GO
+
+
+/*******************************************************************************************************************************
+--	Let's take a look in the results table
 *******************************************************************************************************************************/
 USE DBAUtils;
 
