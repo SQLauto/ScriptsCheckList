@@ -1,12 +1,12 @@
 -- delete from Traces..Alerta where Dt_Alerta = getdate()-1
 /*
-Instruções para realizar os testes.
+Instructions to do the tests
 
-Colocar a execução da procedure EXEC [dbo].[stpAlerta_Queries_Demoradas] no JOB de Traces.
+You have to include the proc EXEC [dbo].[stpAlerta_Queries_Demoradas] in the trace job.
 
-Testar o alerta de lock sozinho
+Testing the locking alerts
 
-Executar os outros testes
+Use the other tests
 
 
 */
