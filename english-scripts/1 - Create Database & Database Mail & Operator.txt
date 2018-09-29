@@ -3,10 +3,29 @@
 *******************************************************************************************************************************/
 
 --------------------------------------------------------------------------------------------------------------------------------
--- 1)	Create the operator for the job notification and also for the severity alerts that we are going to create
---		Create the Trace Database
+-- 1)	Create the Database that will store your configuration
 --------------------------------------------------------------------------------------------------------------------------------
- 
+
+
+USE master
+
+GO
+
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'DBAUtils')
+BEGIN
+CREATE DATABASE DBAUtils 
+
+ALTER DATABASE DBAUtils SET RECOVERY SIMPLE
+END
+ELSE
+BEGIN
+ALTER DATABASE DBAUtils SET RECOVERY SIMPLE    
+END
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- 2)	We setup the Database Mail Profiles for sending emails		
+--------------------------------------------------------------------------------------------------------------------------------
 use master 
 go 
 sp_configure 'show advanced options',1 
@@ -61,6 +80,11 @@ IF NOT EXISTS(SELECT *
       @sequence_number = 1 ; 
   END  
 
+
+---------------------------------------------------------------------------------------------------------------------------------------
+-- 3)	We need an Operator that will receive emails when problem happens. This can be an single/multiple emails, or distribution lists		
+---------------------------------------------------------------------------------------------------------------------------------------
+
 USE [msdb];
 
 GO
@@ -78,25 +102,3 @@ GO
 EXEC msdb.dbo.sp_set_sqlagent_properties @email_save_in_sent_folder=1, 
 		@databasemail_profile=N'DBA Profile' 
 		GO
-
-
-/* 
--- In case we don't have the database, we create one
-
-*/
-
-USE master
-
-GO
-
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'DBAUtils')
-BEGIN
-CREATE DATABASE DBAUtils 
-
-ALTER DATABASE DBAUtils SET RECOVERY SIMPLE
-END
-ELSE
-BEGIN
-ALTER DATABASE DBAUtils SET RECOVERY SIMPLE    
-END
-

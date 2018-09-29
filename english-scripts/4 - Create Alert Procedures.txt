@@ -1,7 +1,7 @@
 use DBAUtils
 GO
 /*******************************************************************************************************************************
---	ALERTA: PROCESSO BLOQUEADO
+--	ALERT: BLOCKED PROCESS
 *******************************************************************************************************************************/
 
 CREATE PROCEDURE [dbo].[usp_Blocked_Process_Alert]
@@ -19,21 +19,21 @@ BEGIN
 			@EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@Blocked_Process_Parameter = Parameter_Value,		-- Minutes,
 			@EmailDestination = Email,
 			@ProfileEmail = Email_Profile
 	FROM [dbo].Alert_Parameters
-	WHERE Id_Alert_Parameter = @Id_Alert_Parameter			-- Processo Bloqueado
+	WHERE Id_Alert_Parameter = @Id_Alert_Parameter			-- BLOCKED PROCESS
 
 	-- Quantidade em Minutes
-	SELECT	@Qty_Time_Root_Lock	= 1		-- Query que esta gerando o lock (rodando a mais de 1 minuto)
+	SELECT	@Qty_Time_Root_Lock	= 1		-- Query which is creating the lock (running for more than 1 minute)
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Cria Tabela para armazenar os Dados da sp_whoisactive
+	--	Creating a temporary table to store the results of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 		
@@ -58,9 +58,9 @@ BEGIN
 	SELECT @Current_Date = GETDATE()
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Carrega os Dados da sp_whoisactive
+	--	Load the data of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Retorna todos os processos que estão sendo executados no momento
+	-- Return all processes that are being executed at the moment
 	EXEC [dbo].[sp_whoisactive]
 			@get_outer_command =	1,
 			@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -75,35 +75,35 @@ BEGIN
 	
 	-- select * from #WhoIsActive_Result
 	
-	-- Verifica se não existe nenhum processo em Execução
+	-- Validate if there are no processes in execution
 	IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 	BEGIN
 		INSERT INTO #WhoIsActive_Result
 		SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 	END
 
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT
 	SELECT @Type = [type]
 	FROM [dbo].Alerts
 	WHERE Id = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
 	
 	/*******************************************************************************************************************************
-	--	Verifica se existe algum Processo Bloqueado
+	--	Validate if there are any BLOCKED PROCESS
 	*******************************************************************************************************************************/	
 	IF EXISTS	(
 					SELECT NULL 
 					FROM #WhoIsActive_Result A
 					JOIN #WhoIsActive_Result B ON A.[blocking_session_id] = B.[session_id]
-					WHERE	DATEDIFF(SECOND,A.[start_time], @Current_Date) > @Blocked_Process_Parameter * 60		-- A query que está sendo bloqueada está rodando a mais 2 Minutes
-							AND DATEDIFF(SECOND,B.[start_time], @Current_Date) > @Qty_Time_Root_Lock * 60			-- A query que está bloqueando está rodando a mais de 1 minuto
+					WHERE	DATEDIFF(SECOND,A.[start_time], @Current_Date) > @Blocked_Process_Parameter * 60		-- The query which is being blocked is running for more than 2 minutes
+							AND DATEDIFF(SECOND,B.[start_time], @Current_Date) > @Qty_Time_Root_Lock * 60			-- The query which is causing the blocking is running for more than 1 minute
 				)
 	BEGIN	-- INICIO - ALERTA
-		IF ISNULL(@Type, 0) = 0	-- Envia o Alerta apenas uma vez
+		IF ISNULL(@Type, 0) = 0	-- Send the alert only once.
 		BEGIN
 			--------------------------------------------------------------------------------------------------------------------------------
-			--	Verifica a quantidade de processos bloqueados
+			--	Validate the amount of blocked processes
 			--------------------------------------------------------------------------------------------------------------------------------
-			-- Declara a variavel e retorna a quantidade de Queries Lentas
+			-- Declare the variable and return the amount of slow queries
 			DECLARE @QtyBlockedProcesses INT = (
 										SELECT COUNT(*)
 										FROM #WhoIsActive_Result A
@@ -149,7 +149,7 @@ BEGIN
 			WHERE	Lock_Level IS NULL
 					AND blocking_session_id IN ( SELECT DISTINCT session_id FROM #WhoIsActive_Result WHERE Lock_Level = 2)
 
-			-- Tratamento quando não tem um Lock Raiz
+			-- Treating when there are no root lock
 			IF NOT EXISTS(select * from #WhoIsActive_Result where Lock_Level IS NOT NULL)
 			BEGIN
 				UPDATE A
@@ -178,7 +178,7 @@ BEGIN
 			END
 
 			/*******************************************************************************************************************************
-			--	CRIA O EMAIL - ALERTA
+			--	CREATE THE EMAIL - ALERT
 			*******************************************************************************************************************************/							
 			
 			--------------------------------------------------------------------------------------------------------------------------------
@@ -368,7 +368,7 @@ BEGIN
 					</a>'
 				
 			/*******************************************************************************************************************************
-			--	ENVIA O EMAIL - ALERTA
+			--	SEND THE EMAIL - ALERT
 			*******************************************************************************************************************************/	
 			EXEC [msdb].[dbo].[sp_send_dbmail]
 					@profile_name = @ProfileEmail,
@@ -379,7 +379,7 @@ BEGIN
 					@importance =	@Importance
 					
 			/*******************************************************************************************************************************
-			-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+			-- Insert a new record in the alerts table -> Type = 1: ALERT
 			*******************************************************************************************************************************/
 			INSERT INTO [dbo].Alerts ( Id_Alert_Parameter, Alert_Message, [type] )
 			SELECT @Id_Alert_Parameter, @Subject, 1			
@@ -556,7 +556,7 @@ BEGIN
 		LogSize           INT 
 	)
 
-	-- Seleciona o número de arquivos.
+	-- Select the number of files.
 	INSERT INTO #logF  
 	EXEC sp_enumerrorlogs
 	
@@ -567,7 +567,7 @@ BEGIN
 
 	SELECT @lC = MIN(ArchiveNumber) FROM #logF
 
-	--Loop para realizar a leitura de todo o log
+	--Loop to read the entire log
 	WHILE @lC IS NOT NULL
 	BEGIN
 		  INSERT INTO #TempLog
@@ -597,7 +597,7 @@ BEGIN
 			@AlertCorruptedDatabaseHeader VARCHAR(MAX), @AlertCorruptedDatabaseTable VARCHAR(MAX), @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- Banco de Dados Corrompido
 	DECLARE @Id_Alert_Parameter INT = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'Corrupted Database')
@@ -690,7 +690,7 @@ BEGIN
 				@importance =	@Importance
 
 		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1		
@@ -777,7 +777,7 @@ BEGIN
 			@ProfileEmail VARCHAR(200)
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@CPU_Parameter = Parameter_Value,					-- Percentual
 			@EmailDestination = Email,
@@ -785,15 +785,15 @@ BEGIN
 	FROM [dbo].Alert_Parameters
 	WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter		-- Consumo CPU
 
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT
 	SELECT @Type = [Type]
 	FROM [dbo].[Alerts]
 	WHERE [Id] = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Cria Tabela para armazenar os Dados da sp_whoisactive
+	--	Creating a temporary table to store the results of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 		
@@ -859,7 +859,7 @@ BEGIN
 				--------------------------------------------------------------------------------------------------------------------------------
 				--	ALERTA - DADOS - WHOISACTIVE
 				--------------------------------------------------------------------------------------------------------------------------------
-				-- Retorna todos os processos que estão sendo executados no momento
+				-- Return all processes that are being executed at the moment
 				EXEC [dbo].[sp_whoisactive]
 						@get_outer_command =	1,
 						@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -874,7 +874,7 @@ BEGIN
 			
 				-- select * from #WhoIsActive_Result
 			
-				-- Verifica se não existe nenhum processo em Execução
+				-- Validate if there are no processes in execution
 				IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 				BEGIN
 					INSERT INTO #WhoIsActive_Result
@@ -1044,7 +1044,7 @@ BEGIN
 						@importance =	@Importance
 					
 				/*******************************************************************************************************************************
-				-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+				-- Insert a new record in the alerts table -> Type = 1: ALERT
 				*******************************************************************************************************************************/
 				INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], Alert_Message, [Type] )
 				SELECT @Id_Alert_Parameter, @Subject, 1			
@@ -1058,7 +1058,7 @@ BEGIN
 			--------------------------------------------------------------------------------------------------------------------------------
 			--	ALERTA - DADOS - WHOISACTIVE
 			--------------------------------------------------------------------------------------------------------------------------------
-			-- Retorna todos os processos que estão sendo executados no momento
+			-- Return all processes that are being executed at the moment
 			EXEC [dbo].[sp_whoisactive]
 					@get_outer_command =	1,
 					@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -1073,7 +1073,7 @@ BEGIN
 			
 			-- select * from #WhoIsActive_Result
 			
-			-- Verifica se não existe nenhum processo em Execução
+			-- Validate if there are no processes in execution
 			IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 			BEGIN
 				INSERT INTO #WhoIsActive_Result
@@ -1252,159 +1252,6 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[usp_Create_Trace]    Script Date: 6/3/2018 4:13:53 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE PROCEDURE [dbo].[usp_Create_Trace]
-AS
-BEGIN
-    -- Trace Queries Demoradas
-    DECLARE @Id_Alert_Parameter INT = (
-                                           SELECT Id_Alert_Parameter
-                                           FROM [DBAUtils].[dbo].Alert_Parameters (NOLOCK)
-                                           WHERE Alert_Name = 'Slow Queries Trace');
-
-    --------------------------------------------------------------------------------------------------------------------------------
-    -- Retrieve the parameters for the alert
-    --------------------------------------------------------------------------------------------------------------------------------
-    DECLARE @Trace_Time INT;
-
-    SELECT @Trace_Time = Parameter_Value -- Seconds
-    FROM [dbo].Alert_Parameters
-    WHERE Id_Alert_Parameter = @Id_Alert_Parameter; -- Slow Queries trace
-
-    -- Security Check for placing a default value in the variable
-    IF (@Trace_Time IS NULL OR @Trace_Time < 0)
-    BEGIN
-        SELECT @Trace_Time = 3; -- Seconds
-    END;
-
-    /*******************************************************************************************************************************
-	-- Created by: SQL Server Profiler 2005
-	-- Date: 09/09/2008  14:44:14
-	*******************************************************************************************************************************/
-    -- Create a Queue.
-    DECLARE @rc INT;
-    DECLARE @TraceID INT;
-    DECLARE @maxfilesize BIGINT;
-    SET @maxfilesize = 50; -- You can set the File Size depending on your environment.
-
-    /*******************************************************************************************************************************
-	-- ATENTION!!!
-	-- Change this path to the desired one!!!
-	*******************************************************************************************************************************/
-    EXEC @rc = sp_trace_create @TraceID OUTPUT,
-                               0,
-                               N'F:\Trace\Slow_Queries',
-                               @maxfilesize,
-                               NULL;
-
-    IF (@rc != 0)
-        GOTO error;
-
-    -- Client side File and Table cannot be scripted.
-
-    -- Set the events.
-    DECLARE @on BIT;
-    SET @on = 1;
-
-    -- 10 RPC:Completed Ocorre quando uma RPC (chamada de procedimento remoto) é concluída. 
-    EXEC sp_trace_setevent @TraceID, 10, 1, @on; -- TextData: Valor de texto dependente da classe de evento capturada no rastreamento.
-    EXEC sp_trace_setevent @TraceID, 10, 6, @on; -- NTUserName: Nome de usuário do Microsoft Windows. 
-    EXEC sp_trace_setevent @TraceID, 10, 8, @on; -- HostName: Nome do computador cliente que originou a solicitação. 
-    EXEC sp_trace_setevent @TraceID, 10, 10, @on; -- ApplicationName: Nome do aplicativo cliente que criou a conexão com uma instância do SQL Server.
-    -- Essa coluna é populada com os valores passados pelo aplicativo e não com o nome exibido do programa.
-    EXEC sp_trace_setevent @TraceID, 10, 11, @on; -- LoginName: Nome de logon do cliente no SQL Server.
-    EXEC sp_trace_setevent @TraceID, 10, 12, @on; -- SPID: ID de processo de servidor atribuída pelo SQL Server ao processo associado ao cliente.
-    EXEC sp_trace_setevent @TraceID, 10, 13, @on; -- Duration: Tempo decorrido (em milhões de segundos) utilizado pelo evento. 
-    -- Esta coluna de dados não é populada pelo evento Hash Warning.
-    EXEC sp_trace_setevent @TraceID, 10, 14, @on; -- StartTime: Horário de início do evento, quando disponível.
-    EXEC sp_trace_setevent @TraceID, 10, 15, @on; -- EndTime: Horário em que o evento foi encerrado. Esta coluna não é populada para classes de evento
-    -- iniciais, como SQL:BatchStarting ou SP:Starting. Também não é populada pelo evento Hash Warning.
-    EXEC sp_trace_setevent @TraceID, 10, 16, @on; -- Reads: Número de leituras lógicas do disco executadas pelo servidor em nome do evento. 
-    -- Esta coluna não é populada pelo evento Lock:Released.
-    EXEC sp_trace_setevent @TraceID, 10, 17, @on; -- Writes: Número de gravações no disco físico executadas pelo servidor em nome do evento.
-    EXEC sp_trace_setevent @TraceID, 10, 18, @on; -- CPU: Tempo da CPU (em milissegundos) usado pelo evento.
-    EXEC sp_trace_setevent @TraceID, 10, 19, @on; -- CPU: Tempo da CPU (em milissegundos) usado pelo evento.
-    EXEC sp_trace_setevent @TraceID, 10, 26, @on; -- ServerName: Nome da instância do SQL Server, servername ou servername\instancename, 
-    -- que está sendo rastreada
-    EXEC sp_trace_setevent @TraceID, 10, 35, @on; -- DatabaseName: Nome do banco de dados especificado na instrução USE banco de dados.
-    EXEC sp_trace_setevent @TraceID, 10, 40, @on; -- DBUserName: Nome de usuário do banco de dados do SQL Server do cliente.
-    EXEC sp_trace_setevent @TraceID, 10, 48, @on; -- RowCounts: Número de linhas no lote.
-    EXEC sp_trace_setevent @TraceID, 10, 64, @on; -- SessionLoginName: O nome de logon do usuário que originou a sessão. Por exemplo, se você 
-    -- se conectar ao SQL Server usando Login1 e executar uma instrução como Login2, SessionLoginName
-    -- irá exibir Login1, enquanto que LoginName exibirá Login2. Esta coluna de dados exibe logons
-    -- tanto do SQL Server, quanto do Windows.
-
-    EXEC sp_trace_setevent @TraceID, 12, 1, @on; -- TextData: Valor de texto dependente da classe de evento capturada no rastreamento.
-    EXEC sp_trace_setevent @TraceID, 12, 6, @on; -- NTUserName: Nome de usuário do Microsoft Windows. 
-    EXEC sp_trace_setevent @TraceID, 12, 8, @on; -- HostName: Nome do computador cliente que originou a solicitação. 
-    EXEC sp_trace_setevent @TraceID, 12, 10, @on; -- ApplicationName: Nome do aplicativo cliente que criou a conexão com uma instância do SQL Server. 
-    -- Essa coluna é populada com os valores passados pelo aplicativo e não com o nome exibido do programa.
-    EXEC sp_trace_setevent @TraceID, 12, 11, @on; -- LoginName: Nome de logon do cliente no SQL Server.
-    EXEC sp_trace_setevent @TraceID, 12, 12, @on; -- SPID: ID de processo de servidor atribuída pelo SQL Server ao processo associado ao cliente.
-    EXEC sp_trace_setevent @TraceID, 12, 13, @on; -- Duration: Tempo decorrido (em milhões de segundos) utilizado pelo evento. Esta coluna de dados não
-    -- é populada pelo evento Hash Warning.
-    EXEC sp_trace_setevent @TraceID, 12, 14, @on; -- StartTime: Horário de início do evento, quando disponível.
-    EXEC sp_trace_setevent @TraceID, 12, 15, @on; -- EndTime: Horário em que o evento foi encerrado. Esta coluna não é populada para classes de evento
-    -- iniciais, como SQL:BatchStarting ou SP:Starting. Também não é populada pelo evento Hash Warning.
-    EXEC sp_trace_setevent @TraceID, 12, 16, @on; -- Reads: Número de leituras lógicas do disco executadas pelo servidor em nome do evento. 
-    -- Esta coluna não é populada pelo evento Lock:Released.
-    EXEC sp_trace_setevent @TraceID, 12, 17, @on; -- Writes: Número de gravações no disco físico executadas pelo servidor em nome do evento.
-    EXEC sp_trace_setevent @TraceID, 12, 18, @on; -- CPU: CPU time (in miliseconds) used by the event.
-    EXEC sp_trace_setevent @TraceID, 12, 26, @on; -- ServerName: Nome da instância do SQL Server, servername ou servername\instancename, 
-    -- que está sendo rastreada
-    EXEC sp_trace_setevent @TraceID, 12, 35, @on; -- DatabaseName: Nome do banco de dados especificado na instrução USE banco de dados.
-    EXEC sp_trace_setevent @TraceID, 12, 40, @on; -- DBUserName: Nome de usuário do banco de dados do SQL Server do cliente.
-    EXEC sp_trace_setevent @TraceID, 12, 48, @on; -- RowCounts: Número de linhas no lote.
-    EXEC sp_trace_setevent @TraceID, 12, 64, @on; -- SessionLoginName: O nome de logon do usuário que originou a sessão. Por exemplo, se você se
-    -- conectar ao SQL Server usando Login1 e executar uma instrução como Login2, SessionLoginName
-    -- irá exibir Login1, enquanto que LoginName exibirá Login2. Esta coluna de dados exibe logons
-    -- tanto do SQL Server, quanto do Windows.
-
-    -- Set the Filters.
-    DECLARE @intfilter INT;
-    DECLARE @bigintfilter BIGINT;
-
-    EXEC sp_trace_setfilter @TraceID,
-                            10,
-                            0,
-                            7,
-                            N'SQL Server Profiler - 4d8f4bca-f08c-4755-b90c-6ec17a6f1275';
-    EXEC sp_trace_setfilter @TraceID, 10, 0, 7, N'DatabaseMail90%';
-
-    /*******************************************************************************************************************************
-	-- Configura o tempo mínimo para as queries demoradas (em segundos)
-	*******************************************************************************************************************************/
-    SET @bigintfilter = 1000000 * @Trace_Time; --  @Trace_Time (in seconds)
-
-    EXEC sp_trace_setfilter @TraceID, 13, 0, 4, @bigintfilter;
-
-    SET @bigintfilter = NULL;
-    EXEC sp_trace_setfilter @TraceID, 13, 0, 1, @bigintfilter;
-
-    EXEC sp_trace_setfilter @TraceID, 1, 0, 7, N'NO STATS%';
-
-    EXEC sp_trace_setfilter @TraceID, 1, 0, 7, N'NULL%';
-
-    -- Set the trace status to start.
-    EXEC sp_trace_setstatus @TraceID, 1;
-
-    -- Display trace id for future references.
-    SELECT TraceID = @TraceID;
-
-    GOTO finish;
-
-    error:
-    SELECT ErrorCode = @rc;
-
-    finish:
-END;
-
-GO
 /****** Object:  StoredProcedure [dbo].[usp_Created_Database_Alert]    Script Date: 6/3/2018 4:13:53 PM ******/
 SET ANSI_NULLS ON
 GO
@@ -1425,7 +1272,7 @@ BEGIN
 	DECLARE @Id_Alert_Parameter INT = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'Created Database')
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	DECLARE @Created_Database_Parameter INT, @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
@@ -1535,7 +1382,7 @@ BEGIN
 				@importance =	@Importance
 
 		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1
@@ -1581,7 +1428,7 @@ BEGIN
 	WHERE 	HSP.[page_id] IS NULL
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- Status Database
 	SELECT @Id_Alert_Parameter = 8	-- SELECT * FROM [dbo].Alert_Parameters
@@ -1700,7 +1547,7 @@ BEGIN
 		FROM #temp_Corrupted_page
 
 		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1	
@@ -1714,13 +1561,13 @@ BEGIN
 	SELECT @Id_Alert_Parameter = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'Database Status')
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@EmailDestination = Email
 	FROM [dbo].[Alert_Parameters]
 	WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter		-- Status Database
 
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT
 	SELECT @Type = [Type]
 	FROM [dbo].[Alerts]		
 	WHERE [Id] = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
@@ -1817,7 +1664,7 @@ BEGIN
 					@importance =	@Importance
 					
 			/*******************************************************************************************************************************
-			-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+			-- Insert a new record in the alerts table -> Type = 1: ALERT
 			*******************************************************************************************************************************/
 			INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 			SELECT @Id_Alert_Parameter, @Subject, 1			
@@ -1941,7 +1788,7 @@ BEGIN
 	DECLARE @Qty_Databases INT, @Qty_Databases_Restore INT
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	DECLARE @Database_Without_Backup_Parameter INT, @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
@@ -2073,7 +1920,7 @@ BEGIN
 				@importance =	@Importance
 
    		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/		
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1
@@ -2093,7 +1940,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Cria a tabela que ira armazenar os dados dos processos
+    
     IF (OBJECT_ID('tempdb..#Disk_Space_DMV') IS NOT NULL)
         DROP TABLE #Disk_Space_DMV;
 
@@ -2115,7 +1962,7 @@ BEGIN
     ) A;
 
 
-    -- Cria a tabela que ira armazenar os dados dos processos
+    
     IF (OBJECT_ID('tempdb..#WhoisActiveResult') IS NOT NULL)
         DROP TABLE #WhoisActiveResult;
 
@@ -2152,7 +1999,7 @@ BEGIN
             @ProfileEmail VARCHAR(200);
 
     --------------------------------------------------------------------------------------------------------------------------------
-    -- Recupera os parametros do Alerta
+    -- Retrieving the parameters of the alert
     --------------------------------------------------------------------------------------------------------------------------------
     -- Espaco Disco
     DECLARE @Id_Alert_Parameter INT = (
@@ -2194,7 +2041,7 @@ BEGIN
             --------------------------------------------------------------------------------------------------------------------------------
             --     ALERTA - DADOS - WHOISACTIVE
             --------------------------------------------------------------------------------------------------------------------------------
-            -- Retorna todos os processos que estão sendo executados no momento
+            -- Return all processes that are being executed at the moment
             EXEC [dbo].[sp_WhoIsActive] @get_outer_command = 1,
                                         @output_column_list = '[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
                                         @destination_table = '#WhoisActiveResult';
@@ -2417,7 +2264,7 @@ BEGIN
                                                @importance = @Importance;
 
             /*******************************************************************************************************************************
-                     -- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+                     -- Insert a new record in the alerts table -> Type = 1: ALERT
               *******************************************************************************************************************************/
             INSERT INTO [dbo].[Alerts]
             (
@@ -2437,7 +2284,7 @@ BEGIN
             --------------------------------------------------------------------------------------------------------------------------------
             --     CLEAR - DADOS - WHOISACTIVE
             --------------------------------------------------------------------------------------------------------------------------------                    
-            -- Retorna todos os processos que estão sendo executados no momento
+            -- Return all processes that are being executed at the moment
             EXEC [dbo].[sp_WhoIsActive] @get_outer_command = 1,
                                         @output_column_list = '[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
                                         @destination_table = '#WhoisActiveResult';
@@ -2466,7 +2313,7 @@ BEGIN
 
             -- select * from #WhoisActiveResult
 
-            -- Verifica se não existe nenhum processo em Execução
+            -- Validate if there are no processes in execution
             IF NOT EXISTS (SELECT TOP 1 * FROM #WhoisActiveResult)
             BEGIN
                 INSERT INTO #WhoisActiveResult
@@ -2724,7 +2571,7 @@ BEGIN
 	)
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	DECLARE @JobFailed_Parametro INT, @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
@@ -2885,7 +2732,7 @@ BEGIN
 				@importance =	@Importance
 
 		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1
@@ -2913,7 +2760,7 @@ BEGIN
 	DECLARE	@Subject VARCHAR(500), @Importance AS VARCHAR(6), @EmailBody VARCHAR(MAX), @EmptyBodyEmail VARCHAR(MAX),
 			@WhoisactiveResultHeader VARCHAR(MAX), @WhoisactiveResultTable VARCHAR(MAX), @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	 
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('TempDb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 		
@@ -2934,7 +2781,7 @@ BEGIN
 		[sql_command]			XML
     )      
       
-    -- Retorna todos os processos que estão sendo executados no momento
+    -- Return all processes that are being executed at the moment
     EXEC [dbo].[sp_whoisactive]
 			@get_outer_command =	1,
             @output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -2949,7 +2796,7 @@ BEGIN
 	
 	-- select * from #WhoIsActive_Result
 	
-	-- Verifica se não existe nenhum processo em Execução
+	-- Validate if there are no processes in execution
 	IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 	BEGIN
 		INSERT INTO #WhoIsActive_Result
@@ -2957,7 +2804,7 @@ BEGIN
 	END
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- Processos em Execução
 	DECLARE @Id_Alert_Parameter INT = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'Processes in execution')
@@ -3104,7 +2951,7 @@ BEGIN
 	DECLARE @Id_Alert_Parameter INT = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'Slow Queries')
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	DECLARE @Slow_Queries_Parameter INT, @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
@@ -3130,7 +2977,7 @@ BEGIN
 	WHERE [StartTime] >= DATEADD(mi, -5, GETDATE())
 	ORDER BY [Duration] DESC
 
-	-- Declara a variavel e retorna a quantidade de Queries Lentas
+	-- Declare the variable and return the amount of slow queries
 	DECLARE @Count_Slow_Queries INT = ( SELECT COUNT(*) FROM #Slow_Queries_Temp ) 
 	
 	/*******************************************************************************************************************************
@@ -3138,7 +2985,7 @@ BEGIN
 	*******************************************************************************************************************************/
 	IF (@Count_Slow_Queries > @Slow_Queries_Parameter)
 	BEGIN
-		-- Cria a tabela que ira armazenar os dados dos processos
+		
 		IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 			DROP TABLE #WhoIsActive_Result
 				
@@ -3162,7 +3009,7 @@ BEGIN
 		--------------------------------------------------------------------------------------------------------------------------------
 		--	ALERTA - DADOS - WHOISACTIVE
 		--------------------------------------------------------------------------------------------------------------------------------
-		-- Retorna todos os processos que estão sendo executados no momento
+		-- Return all processes that are being executed at the moment
 		EXEC [dbo].[sp_whoisactive]
 				@get_outer_command =	1,
 				@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -3177,7 +3024,7 @@ BEGIN
 			
 		-- select * from #WhoIsActive_Result
 			
-		-- Verifica se não existe nenhum processo em Execução
+		-- Validate if there are no processes in execution
 		IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 		BEGIN
 			INSERT INTO #WhoIsActive_Result
@@ -3397,7 +3244,7 @@ BEGIN
 			@ProfileEmail VARCHAR(200)
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@Connection_SQLServer_Parameter = Parameter_Value,	-- Quantidade
 			@EmailDestination = Email,
@@ -3407,15 +3254,15 @@ BEGIN
 
 	SELECT @Qty_Connections = count(*) FROM sys.dm_exec_sessions WHERE session_id > 50
 
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT
 	SELECT @Type = [Type]
 	FROM [dbo].[Alerts]
 	WHERE [Id] = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Cria Tabela para armazenar os Dados da sp_whoisactive
+	--	Creating a temporary table to store the results of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 		
@@ -3440,9 +3287,9 @@ BEGIN
 	SELECT @Current_Date = GETDATE()
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Carrega os Dados da sp_whoisactive
+	--	Load the data of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Retorna todos os processos que estão sendo executados no momento
+	-- Return all processes that are being executed at the moment
 	EXEC [dbo].[sp_whoisactive]
 			@get_outer_command =	1,
 			@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -3457,7 +3304,7 @@ BEGIN
 	
 	-- select * from #WhoIsActive_Result
 	
-	-- Verifica se não existe nenhum processo em Execução
+	-- Validate if there are no processes in execution
 	IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 	BEGIN
 		INSERT INTO #WhoIsActive_Result
@@ -3650,7 +3497,7 @@ BEGIN
 				@importance =	@Importance
 
    		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/		
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1
@@ -3871,7 +3718,7 @@ BEGIN
 	DECLARE @Id_Alert_Parameter INT = (SELECT Id_Alert_Parameter FROM [dbo].Alert_Parameters (NOLOCK) WHERE Alert_Name = 'SQL Server Restarted')
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	DECLARE @SQL_Restarted_Parameter INT, @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
@@ -3976,7 +3823,7 @@ BEGIN
 				@importance =	@Importance
 
 		/*******************************************************************************************************************************
-		-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+		-- Insert a new record in the alerts table -> Type = 1: ALERT
 		*******************************************************************************************************************************/
 		INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 		SELECT @Id_Alert_Parameter, @Subject, 1
@@ -4007,7 +3854,7 @@ BEGIN
 	declare @Connection_Time_Hours tinyint, @Tempdb_Parameter int, @EmailDestination VARCHAR(500), @Tempdb_size INT, @ProfileEmail VARCHAR(200)
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@Tempdb_Parameter = Parameter_Value,				-- Percentual
 			@EmailDestination = Email,
@@ -4024,7 +3871,7 @@ BEGIN
 			@AlertSizeTempdbTable VARCHAR(MAX), @AlertTempdbFileUtilizationHeader VARCHAR(MAX), @AlertSizeTempdbConectionsTable VARCHAR(MAX), 
 			@EmptyBodyEmail VARCHAR(MAX), @AlertTempdbProcessExecHeader VARCHAR(MAX), @AlertTempdbProcessExecTable VARCHAR(MAX), @Current_Date DATETIME
 
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT
 	SELECT @Type = [Type]
 	FROM [dbo].[Alerts]
 	WHERE [Id] = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
@@ -4080,9 +3927,9 @@ BEGIN
 	END
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Cria Tabela para armazenar os Dados da sp_whoisactive
+	--	Creating a temporary table to store the results of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 		
@@ -4107,9 +3954,9 @@ BEGIN
 	SELECT @Current_Date = GETDATE()
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	--	Carrega os Dados da sp_whoisactive
+	--	Load the data of sp_whoisactive
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Retorna todos os processos que estão sendo executados no momento
+	-- Return all processes that are being executed at the moment
 	EXEC [dbo].[sp_whoisactive]
 			@get_outer_command =	1,
 			@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -4124,7 +3971,7 @@ BEGIN
 	
 	-- select * from #WhoIsActive_Result
 	
-	-- Verifica se não existe nenhum processo em Execução
+	-- Validate if there are no processes in execution
 	IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 	BEGIN
 		INSERT INTO #WhoIsActive_Result
@@ -4382,7 +4229,7 @@ BEGIN
 					@importance =	@Importance
 					
 			/*******************************************************************************************************************************
-			-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+			-- Insert a new record in the alerts table -> Type = 1: ALERT
 			*******************************************************************************************************************************/
 			INSERT INTO [dbo].[Alerts] ( [Id_Alert_Parameter], [Alert_Message], [Type] )
 			SELECT @Id_Alert_Parameter, @Subject, 1			
@@ -4666,7 +4513,7 @@ BEGIN
 			@WhoisactiveResultHeader VARCHAR(MAX), @WhoisactiveResultTable VARCHAR(MAX), @EmailDestination VARCHAR(500), @ProfileEmail VARCHAR(200)
 	
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- Recupera os parametros do Alerta
+	-- Retrieving the parameters of the alert
 	--------------------------------------------------------------------------------------------------------------------------------
 	SELECT	@Log_Full_Parameter = Parameter_Value,				-- Percentual
 			@EmailDestination = Email,
@@ -4677,12 +4524,12 @@ BEGIN
 	-- Seta as variaveis
 	SELECT	@Minimum_Log_Size = 50000		-- 500 MB
 	
-	-- Verifica o último Tipo do Alerta registrado -> 0: CLEAR / 1: ALERTA	
+	-- Validate the last alert type registered in the alerts table -> 0: CLEAR / 1: ALERT	
 	SELECT @Type = [Type]
 	FROM [dbo].Alerts
 	WHERE [Id] = (SELECT MAX(Id) FROM [dbo].[Alerts] WHERE [Id_Alert_Parameter] = @Id_Alert_Parameter )
 	
-	-- Cria a tabela que ira armazenar os dados dos processos
+	
 	IF ( OBJECT_ID('tempdb..#WhoIsActive_Result') IS NOT NULL )
 		DROP TABLE #WhoIsActive_Result
 				
@@ -4736,7 +4583,7 @@ BEGIN
 			--------------------------------------------------------------------------------------------------------------------------------
 			--	ALERTA - DADOS - WHOISACTIVE
 			--------------------------------------------------------------------------------------------------------------------------------
-			-- Retorna todos os processos que estão sendo executados no momento
+			-- Return all processes that are being executed at the moment
 			EXEC [dbo].[sp_whoisactive]
 					@get_outer_command =	1,
 					@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -4751,7 +4598,7 @@ BEGIN
 			
 			-- select * from #WhoIsActive_Result
 			
-			-- Verifica se não existe nenhum processo em Execução
+			-- Validate if there are no processes in execution
 			IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 			BEGIN
 				INSERT INTO #WhoIsActive_Result
@@ -4916,7 +4763,7 @@ BEGIN
 					@importance =	@Importance
            	
            	/*******************************************************************************************************************************
-			-- Insere um Registro na Tabela de Controle dos Alertas -> Fl_Tipo = 1 : ALERTA
+			-- Insert a new record in the alerts table -> Type = 1: ALERT
 			*******************************************************************************************************************************/
 			INSERT INTO [dbo].[Alerts] ( Id_Alert_Parameter, Alert_Message, [type] )
 			SELECT @Id_Alert_Parameter, @Subject, 1			
@@ -4929,7 +4776,7 @@ BEGIN
 			--------------------------------------------------------------------------------------------------------------------------------
 			--	CLEAR - DADOS - WHOISACTIVE
 			--------------------------------------------------------------------------------------------------------------------------------		      
-			-- Retorna todos os processos que estão sendo executados no momento
+			-- Return all processes that are being executed at the moment
 			EXEC [dbo].[sp_whoisactive]
 					@get_outer_command =	1,
 					@output_column_list =	'[dd hh:mm:ss.mss][database_name][login_name][host_name][start_time][status][session_id][blocking_session_id][wait_info][open_tran_count][CPU][reads][writes][sql_command]',
@@ -4944,7 +4791,7 @@ BEGIN
 			
 			-- select * from #WhoIsActive_Result
 			
-			-- Verifica se não existe nenhum processo em Execução
+			-- Validate if there are no processes in execution
 			IF NOT EXISTS ( SELECT TOP 1 * FROM #WhoIsActive_Result )
 			BEGIN
 				INSERT INTO #WhoIsActive_Result

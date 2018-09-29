@@ -1,18 +1,18 @@
 /*******************************************************************************************************************************
---	Instruções de utilização do script.
+--	How to use this file.
 *******************************************************************************************************************************/
---	1) Substituir o e-mail "E-mail@provedor.com" pelos emails que devem receber os Alertas e substituir o profile 'MSSQLServer' pelo que será utilizado
+--	1) We change the @EmailProfile e-mail "E-mail@provedor.com" for the same emails that we setup in the first step. We also use the same Database Mail Profile created
 
 DECLARE @Email VARCHAR(MAX);
 DECLARE @EmailProfile VARCHAR(MAX);
 
 SELECT @Email = 'sqlfreccia@outlook.com';
 SELECT @EmailProfile = 'DBA Profile';
---	2) Basta aperta F5 para executar o script completo.
+
 
 
 /*******************************************************************************************************************************
---	Database que será utilizada para armazenar os dados dos Alertas. Se for necessário, altere para o nome desejado.
+--	Don't forget to use the correct database to create all the configuration
 *******************************************************************************************************************************/
 USE [DBAUtils];
 
@@ -29,7 +29,7 @@ CREATE TABLE [dbo].[Alerts]
     [Id] INT IDENTITY PRIMARY KEY,
     [Id_Alert_Parameter] INT NOT NULL,
     [Alert_Message] VARCHAR(2000),
-    [type] TINYINT, -- 0: CLEAR / 1: ALERTA
+    [type] TINYINT, -- 0: CLEAR / 1: ALERT
     [Alert_Date] DATETIME
         DEFAULT (GETDATE())
 );
@@ -53,6 +53,21 @@ ALTER TABLE [dbo].[Alerts]
 ADD CONSTRAINT FK01_Alerts
     FOREIGN KEY ([Id_Alert_Parameter])
     REFERENCES [dbo].[Alert_Parameters] ([Id_Alert_Parameter]);
+
+/*******************************************************************************************************************************
+--	Table to control the suspect pages historical information
+*******************************************************************************************************************************/
+IF ( OBJECT_ID('[dbo].[Suspect_Pages_Historic]') IS NOT NULL )
+	DROP TABLE [dbo].[Suspect_Pages_Historic]
+
+CREATE TABLE [dbo].[Suspect_Pages_Historic](
+	[database_id] [int] NOT NULL,
+	[file_id] [int] NOT NULL,
+	[page_id] [bigint] NOT NULL,
+	[event_type] [int] NOT NULL,
+	[corruption_date] [datetime] NOT NULL
+) ON [PRIMARY]
+
 
 --------------------------------------------------------------------------------------------------------------------------------
 --	Insert Data on parameters table
